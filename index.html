@@ -336,7 +336,7 @@
       </div>
       <textarea id="basePrompt" rows="3"
         placeholder="填写通用风格提示词…" 
-        title="描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征">卡牌游戏角色插画，纯黑色背景，角色整体有橙黄色粗轮廓描边（贴纸挖空效果），内部手绘铅笔素描交叉排线纹理，黑色细线内部勾勒结构，Q版大头小身2至3头身比例，动态姿势充满力量感，高清晰度居中构图，正方形画幅</textarea>
+        title="描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征">卡牌游戏角色插画，纯黑色背景，角色整体有橙黄色粗轮廓描边（贴纸挖空效果），内部手绘铅笔素描交叉排线纹理，黑色细线内部勾勒结构，Q版大头小身2至3头身比例，动态姿势充满力量感，正方形画幅</textarea>
     </div>
 
     <hr class="divider">
@@ -933,12 +933,12 @@ function initCombo(inputId, dropdownId, options) {
 // ── 提示词预览 ────────────────────────────────────────────────────
 function buildPrompt() {
   const resolution = document.getElementById('resolutionSelect').value;
-  const resText = resolution === '2K' ? '2K超高清晰度居中构图' : '高清晰度居中构图';
-  const base = document.getElementById('basePrompt').value.trim().replace('高清晰度居中构图', resText);
+  const resText = resolution === '2K' ? '2K超高清晰度居中构图' : '1K高清晰度居中构图';
+  const base = document.getElementById('basePrompt').value.trim();
   const race = document.getElementById('raceInput').value.trim();
   const cls  = document.getElementById('classInput').value.trim();
   const char = document.getElementById('charInput').value.trim();
-  return [base, race, cls, char].filter(Boolean).join('，');
+  return [base, resText, race, cls, char].filter(Boolean).join('，');
 }
 
 function updatePreview() {
