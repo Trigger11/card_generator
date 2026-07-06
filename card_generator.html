@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>卡牌角色生成器 · Lovart</title>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --surface: #1a1a24;
+    --surface2: #22223a;
+    --border: #2e2e4a;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --text: #e2e2f0;
+    --text-dim: #888899;
+    --success: #34d399;
+    --error: #f87171;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent2);
+    letter-spacing: .5px;
+  }
+  header span { font-size: 13px; color: var(--text-dim); margin-left: 10px; }
+  .btn-settings {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 7px 14px; border-radius: 8px;
+    cursor: pointer; font-size: 14px; transition: border-color .2s;
+  }
+  .btn-settings:hover { border-color: var(--accent); color: var(--accent2); }
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-left {
+    width: 380px;
+    min-width: 240px;
+    max-width: 60vw;
+    flex-shrink: 0;
+    padding: 24px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .resizer {
+    width: 5px;
+    flex-shrink: 0;
+    background: var(--border);
+    cursor: col-resize;
+    position: relative;
+    transition: background .15s;
+    user-select: none;
+  }
+  .resizer:hover, .resizer.dragging {
+    background: var(--accent);
+  }
+  .resizer::after {
+    content: '';
+    position: absolute;
+    inset: 0 -4px;
+  }
+  .panel-right {
+    flex: 1;
+    min-width: 0;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+</style>
+<style>
+  /* ── form elements ── */
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label {
+    font-size: 13px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .8px;
+  }
+  textarea, .combo-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 14px;
+    padding: 10px 12px;
+    transition: border-color .2s;
+    resize: vertical;
+    line-height: 1.5;
+    font-family: inherit;
+    width: 100%;
+  }
+  textarea:focus, .combo-input:focus {
+    outline: none; border-color: var(--accent);
+  }
+  /* ── combobox ── */
+  .combo-wrap { position: relative; }
+  .combo-input { cursor: text; padding-right: 32px; }
+  .combo-arrow {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 12px;
+    user-select: none; pointer-events: none;
+    transition: opacity .15s;
+  }
+  .combo-wrap.has-value .combo-arrow { display: none; }
+  .combo-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 14px; line-height: 1;
+    cursor: pointer; user-select: none;
+    width: 18px; height: 18px;
+    display: none;
+    align-items: center; justify-content: center;
+    border-radius: 50%;
+    transition: background .15s, color .15s;
+  }
+  .combo-clear:hover { background: var(--border); color: var(--text); }
+  .combo-wrap.has-value .combo-clear { display: flex; }
+  .combo-dropdown {
+    display: none;
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100;
+    background: var(--surface2); border: 1px solid var(--accent);
+    border-radius: 8px; overflow: hidden;
+    max-height: 220px; overflow-y: auto;
+  }
+  .combo-dropdown.open { display: block; }
+  .combo-option {
+    padding: 9px 14px; font-size: 14px; cursor: pointer;
+    transition: background .15s;
+  }
+  .combo-option:hover, .combo-option.active { background: var(--accent); color: #fff; }
+  /* ── prompt preview ── */
+  .preview-box {
+    background: var(--surface2); border: 1px dashed var(--border);
+    border-radius: 8px; padding: 12px 14px;
+    font-size: 13px; color: var(--text-dim);
+    line-height: 1.6; min-height: 160px; max-height: 160px;
+    overflow-y: auto;
+  }
+  .preview-box strong { color: var(--accent2); }
+  /* ── generate button ── */
+  .btn-generate {
+    background: linear-gradient(135deg, var(--accent), #9b59e0);
+    border: none; color: #fff;
+    padding: 13px 0; border-radius: 10px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: .5px;
+    transition: opacity .2s, transform .1s;
+    width: 100%;
+  }
+  .btn-generate:hover { opacity: .9; }
+  .btn-generate:active { transform: scale(.98); }
+  .btn-generate:disabled { opacity: .45; cursor: not-allowed; }
+  /* ── status bar ── */
+  .status-bar {
+    font-size: 13px; padding: 8px 14px; border-radius: 8px;
+    display: none; align-items: center; gap: 8px;
+  }
+  .status-bar.info { display: flex; background: #1e2a4a; color: #93c5fd; border: 1px solid #3b5998; }
+  .status-bar.success { display: flex; background: #14332a; color: var(--success); border: 1px solid #2d6652; }
+  .status-bar.error { display: flex; background: #3b1a1a; color: var(--error); border: 1px solid #7a2323; }
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.2);
+    border-top-color: #93c5fd; border-radius: 50%;
+    animation: spin .8s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* ── results grid ── */
+  .results-title { font-size: 15px; font-weight: 600; color: var(--text-dim); }
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    transition: transform .2s, border-color .2s;
+  }
+  .result-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .result-card img {
+    width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block;
+  }
+  .result-card-footer {
+    padding: 10px 12px;
+    display: flex; gap: 8px;
+  }
+  .btn-dl {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 0; border-radius: 6px;
+    font-size: 12px; cursor: pointer; text-align: center;
+    text-decoration: none; display: block;
+    transition: border-color .2s;
+  }
+  .btn-dl:hover { border-color: var(--accent); color: var(--accent2); }
+  .empty-state {
+    text-align: center; color: var(--text-dim);
+    padding: 60px 20px; font-size: 15px; grid-column: 1/-1;
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  /* ── image viewer modal ── */
+  .viewer-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,.9);
+    align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-overlay img {
+    max-width: 95vw; max-height: 95vh;
+    object-fit: contain;
+    cursor: default;
+  }
+  .viewer-close {
+    position: absolute; top: 20px; right: 20px;
+    color: #fff; font-size: 32px;
+    cursor: pointer; user-select: none;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity .2s;
+  }
+  .viewer-close:hover { opacity: .7; }
+  /* ── model select ── */
+  select {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 8px;
+    font-size: 14px; font-family: inherit; width: 100%;
+    transition: border-color .2s; cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+  /* ── modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.65); z-index: 999;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px 28px 24px;
+    width: 420px; max-width: 95vw;
+  }
+  .modal h2 { font-size: 17px; margin-bottom: 20px; color: var(--accent2); }
+  .modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .modal-field label { font-size: 13px; color: var(--text-dim); font-weight: 600; }
+  .modal-field input {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 8px;
+    font-size: 14px; font-family: inherit; width: 100%;
+  }
+  .modal-field input:focus { outline: none; border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-save {
+    flex: 1; background: var(--accent); border: none; color: #fff;
+    padding: 10px 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: opacity .2s;
+  }
+  .btn-save:hover { opacity: .85; }
+  .btn-cancel {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 0; border-radius: 8px;
+    font-size: 14px; cursor: pointer; transition: border-color .2s;
+  }
+  .btn-cancel:hover { border-color: var(--accent); }
+  .key-hint {
+    font-size: 11px; color: var(--text-dim);
+    margin-top: 4px; line-height: 1.4;
+  }
+  /* ── section divider ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2px 0; }
+  /* ── scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  @media (max-width: 700px) {
+    main { flex-direction: column; }
+    .panel-left { width: 100% !important; max-width: 100%; min-width: 0; }
+    .resizer { display: none; }
+    .panel-right { min-height: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<header>
+  <div style="display:flex;align-items:center;gap:8px">
+    <h1>🃏 卡牌角色生成器</h1>
+    <span id="keyStatus">· 未配置 API Key</span>
+    <span id="projectStatus" style="font-size:12px;color:var(--text-dim);"></span>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn-settings" onclick="resetProject()" title="清除当前项目，下次生成时创建新项目">🔄 重置项目</button>
+    <button class="btn-settings" onclick="openProjectView()">📂 查看项目</button>
+    <button class="btn-settings" onclick="openSettings()">⚙️ API 设置</button>
+  </div>
+</header>
+
+<!-- 主体 -->
+<main id="mainLayout">
+  <!-- 左侧表单 -->
+  <div class="panel-left" id="panelLeft">
+
+    <!-- 基础提示词 -->
+    <div class="field-group">
+      <label class="field-label">基础提示词</label>
+      <textarea id="basePrompt" rows="3"
+        placeholder="填写通用风格提示词…" 
+        title="描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征">卡牌游戏角色插画，纯黑色背景，角色整体有橙黄色粗轮廓描边（贴纸挖空效果），内部手绘铅笔素描交叉排线纹理，黑色细线内部勾勒结构，Q版大头小身2至3头身比例，动态姿势充满力量感，高清晰度居中构图，正方形画幅</textarea>
+    </div>
+
+    <hr class="divider">
+
+    <!-- 种族提示词（combobox） -->
+    <div class="field-group">
+      <label class="field-label">种族提示词</label>
+      <div class="combo-wrap" id="raceWrap">
+        <input class="combo-input" id="raceInput" placeholder="选择或输入种族..." autocomplete="off" title="选择角色的种族分类，如文具族、纸艺族、涂鸦族等">
+        <span class="combo-arrow">▾</span>
+        <span class="combo-clear" id="raceClear" title="清空">✕</span>
+        <div class="combo-dropdown" id="raceDropdown"></div>
+      </div>
+    </div>
+
+    <!-- 职业提示词（combobox） -->
+    <div class="field-group">
+      <label class="field-label">职业提示词</label>
+      <div class="combo-wrap" id="classWrap">
+        <input class="combo-input" id="classInput" placeholder="选择或输入职业..." autocomplete="off" title="选择角色的职业定位，如剑士、守卫、法师等">
+        <span class="combo-arrow">▾</span>
+        <span class="combo-clear" id="classClear" title="清空">✕</span>
+        <div class="combo-dropdown" id="classDropdown"></div>
+      </div>
+    </div>
+
+    <!-- 角色提示词（多行文本框） -->
+    <div class="field-group">
+      <label class="field-label">角色提示词</label>
+      <textarea id="charInput" rows="4"
+        placeholder="描述角色的具体外观、特征、装备、气质等，例如：&#10;传说级橡皮守卫，厚重的粉色橡皮材质全身铠甲，铠甲表面有铅笔摩擦留下的石墨痕迹，手持巨型橡皮盾牌，护盾边缘散发金色守护光芒"
+        title="详细描述角色的外观、特征、装备、动作、表情等具体细节"></textarea>
+    </div>
+
+    <hr class="divider">
+
+    <!-- 模型选择 -->
+    <div class="field-group">
+      <label class="field-label">生成模型</label>
+      <select id="modelSelect">
+        <option value="generate_image_gpt_image_2_medium" selected>GPT Image 2 Medium（默认）</option>
+        <option value="generate_image_nano_banana_2">Nano Banana 2</option>
+        <option value="generate_image_nano_banana_pro">Nano Banana Pro</option>
+      </select>
+    </div>
+
+    <!-- 提示词预览 -->
+    <div class="field-group">
+      <label class="field-label">提示词预览</label>
+      <div class="preview-box" id="promptPreview" title="自动组合上方所有提示词的最终效果预览">在上方填写后将自动组合提示词…</div>
+    </div>
+
+    <!-- 状态提示 -->
+    <div class="status-bar" id="statusBar">
+      <div class="spinner" id="statusSpinner"></div>
+      <span id="statusText"></span>
+    </div>
+
+    <!-- 生成按钮 -->
+    <button class="btn-generate" id="btnGenerate" onclick="generate()">✨ 生成卡牌角色</button>
+
+  </div>
+
+  <!-- 拖拽分割条 -->
+  <div class="resizer" id="resizer"></div>
+
+  <!-- 右侧结果 -->
+  <div class="panel-right">
+    <div class="results-title">生成结果</div>
+    <div class="results-grid" id="resultsGrid">
+      <div class="empty-state">
+        <div class="icon">🎨</div>
+        <div>填写提示词，点击「生成卡牌角色」开始创作</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- 设置弹窗 -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>⚙️ API 密钥配置</h2>
+    <div class="modal-field">
+      <label>LOVART_ACCESS_KEY</label>
+      <input type="password" id="inputAK" placeholder="ak_xxx...">
+    </div>
+    <div class="modal-field">
+      <label>LOVART_SECRET_KEY</label>
+      <input type="password" id="inputSK" placeholder="sk_xxx...">
+      <p class="key-hint">前往 Lovart 平台 → 头像菜单 → AK/SK 管理 获取密钥。<br>密钥仅保存在浏览器本地，不会上传到任何服务器。</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" onclick="saveSettings()">保存</button>
+      <button class="btn-cancel" onclick="closeSettings()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 图片查看器弹窗 -->
+<div class="viewer-overlay" id="viewerOverlay">
+  <span class="viewer-close" onclick="closeViewer()">×</span>
+  <img id="viewerImage" src="" alt="查看图片">
+</div>
+
+<!-- 查看项目弹窗 -->
+<div class="modal-overlay" id="projectViewModal">
+  <div class="modal" style="width: 800px; max-width: 95vw; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+    <h2>📂 查看当前项目</h2>
+    
+    <div style="margin-bottom: 16px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn-save" onclick="loadProjectContent()" style="flex: 0 0 auto; padding: 8px 16px;">🔄 刷新内容</button>
+        <div id="projectViewStatus" style="flex: 1; font-size: 13px; color: var(--text-dim); display: flex; align-items: center; padding-left: 8px;"></div>
+        <a id="projectViewLink" href="#" target="_blank" style="color:var(--accent);text-decoration:none;font-size:13px;display:none;">🔗 在Lovart中打开</a>
+      </div>
+    </div>
+
+    <div id="projectViewContent" style="flex: 1; overflow-y: auto; min-height: 400px;">
+      <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
+        <div style="font-size: 48px; margin-bottom: 12px;">📋</div>
+        <div>点击「刷新内容」查看当前项目的所有图片</div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 16px;">
+      <button class="btn-cancel" onclick="closeProjectView()">关闭</button>
+    </div>
+  </div>
+</div>
+
+</body>
+
+<script>
+// ── 常量数据 ────────────────────────────────────────────────────────
+const BASE_URL = 'https://lgw.lovart.ai';
+const PATH_PREFIX = '/v1/openapi';
+
+// 种族 — 完全基于游戏内真实种族
+const RACE_OPTIONS = [
+  {
+    label: '文具 — 铅笔/橡皮/胶带/圆规等文具拟人',
+    value: '文具族，拟人化文具角色，铅笔或橡皮或圆规或胶带等文具材质构成身体，六棱柱或圆柱形体态，铅笔木质纹理或橡皮粉色材质可见，素描交叉排线内部纹理，身体轮廓几何简洁，文具零件构成的武器道具'
+  },
+  {
+    label: '纸艺 — 折纸/纸张/纸飞机构成',
+    value: '纸艺族，折纸构造的生命体，几何折叠纸张躯体，清晰锋利的折痕线条，白色或淡米色纸张质感，手绘素描轮廓线，纸张边缘翘起细节，轻盈姿态'
+  },
+  {
+    label: '涂鸦 — 粉笔/手绘线稿风格',
+    value: '涂鸦族，手绘粗线稿风格角色，粗犷的铅笔或马克笔素描轮廓，填色不均匀的手绘质感，线条略显歪斜，涂鸦字体和装饰元素，笔触感强烈，充满活力'
+  },
+  {
+    label: '墨水 — 流动墨水/水墨灵体',
+    value: '墨水族，流动墨汁构成的生命体，黑色墨水泼洒和墨晕质感，书法笔触形成的肢体轮廓，墨滴飞溅装饰，水墨渗染纹理，深色半透明液态感'
+  },
+  {
+    label: '贵族 — 学院精英/书卷贵族',
+    value: '贵族族，学院制服风格角色，整洁的外套和领结，素描线条勾勒的服装细节，羊皮纸和书卷道具，端正优雅姿态，手绘排线表现布料质感'
+  },
+  {
+    label: '玩具 — 木偶/发条机械玩具',
+    value: '玩具族，木制关节人偶或发条机械玩具造型，木材纹理素描表现，关节球状连接处可见，缝线拼接痕迹，表面磨损和掉漆的手绘细节，复古机械感'
+  },
+  {
+    label: '精灵 — 星叶/自然灵体',
+    value: '精灵族，轻盈小巧的精灵造型，叶片或星形装饰元素，细腻的素描线条表现半透明翅翼，植物纹路细节，精致小巧的五官，自然元素装饰'
+  },
+];
+
+// 职业 — 完全基于游戏内真实职业
+const CLASS_OPTIONS = [
+  {
+    label: '剑士 — 近战攻击，攻击时增强',
+    value: '剑士职业，持剑近战动态姿势，挥砍或冲刺动作，手绘素描线条表现动感，剑身细节用排线刻画，充满爆发力的进攻姿态，速度动感线条装饰'
+  },
+  {
+    label: '守卫 — 前排坦克，护盾/生命强化',
+    value: '守卫职业，举盾防御姿态，厚重盾牌素描细节丰富，宽厚稳重的体型比例，铠甲排线纹理，双脚稳固站立，防御气势十足'
+  },
+  {
+    label: '射手 — 远程物理，远程伤害输出',
+    value: '射手职业，蓄力瞄准远程攻击姿势，弓箭或弹射装置手绘细节，轻盈灵活的体型，精准眼神，弹道轨迹线条装饰'
+  },
+  {
+    label: '法师 — 墨水魔法，墨水伤害输出',
+    value: '法师职业，施法姿态，手持法杖或魔法书，墨水笔触构成的魔法效果，神秘长袍素描褶皱细节，手绘符文装饰，专注施法表情'
+  },
+  {
+    label: '士兵 — 均衡战斗，攻防兼备',
+    value: '士兵职业，标准战斗装备，攻防均衡站姿，制式铠甲或军装素描排线纹理，持武器待命状态，整齐规范的造型'
+  },
+  {
+    label: '飞行 — 空中单位，高机动性',
+    value: '飞行职业，展翅飞翔冲刺姿态，翅翼手绘线条细节，俯冲动感姿势，周围速度线条装饰，轻盈小巧体型，冲刺气势'
+  },
+  {
+    label: '召唤 — 召唤分身，遗言/召唤特效',
+    value: '召唤职业，施召唤术姿态，手势伸展，周围浮现小型召唤物轮廓，神秘感，召唤物用虚线或轻描线稿表现'
+  },
+  {
+    label: '学徒 — 辅助强化，回合开始增益',
+    value: '学徒职业，手持书本或笔记本，学习成长姿态，稚嫩可爱比例，书页翻飞素描细节，认真专注的表情，支援辅助气质'
+  },
+  {
+    label: '墨点 — 毒素/遗言效果',
+    value: '墨点职业，小巧圆润的墨滴造型，墨汁溅射纹理，狡黠灵动的眼神，墨点飞溅装饰元素，素描墨水渗透质感，邪魅可爱'
+  },
+  {
+    label: '商人 — 经济/出售增益',
+    value: '商人职业，精明商旅打扮，携带货物道具或袋子，手绘素描服装细节，圆滑得意表情，货币或账本装饰元素'
+  },
+  {
+    label: '炎术士 — 火焰系，燃烧/火焰伤害',
+    value: '炎术士职业，火焰施法姿态，手绘火焰线条装饰，橙红色调的速度线和火焰装饰元素，火焰武器素描细节，热烈进攻气势'
+  },
+  {
+    label: '冰凌使 — 冰霜系，冻结/冰冷伤害',
+    value: '冰凌使职业，冰霜施法姿态，手绘冰晶线条装饰，锋利冰棱素描细节，冰雪结晶几何纹样，冷静精准的气质'
+  },
+];
+
+// ── 本地存储 Key ──────────────────────────────────────────────────
+const LS_AK = 'lovart_ak';
+const LS_SK = 'lovart_sk';
+const LS_PROJECT_ID = 'lovart_project_id';  // 保存项目ID
+
+// ── 初始化 ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initCombo('raceInput', 'raceDropdown', RACE_OPTIONS);
+  initCombo('classInput', 'classDropdown', CLASS_OPTIONS);
+  updatePreview();
+  loadSettings();
+
+  // 实时更新预览
+  ['basePrompt', 'raceInput', 'classInput', 'charInput'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updatePreview);
+  });
+
+  // 动态更新tooltip显示文本框完整内容
+  function updateTooltip(element) {
+    const value = element.value.trim();
+    if (value) {
+      element.title = value;
+    } else {
+      // 恢复默认提示
+      const defaultTooltips = {
+        'basePrompt': '描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征',
+        'raceInput': '选择角色的种族分类，如文具族、纸艺族、涂鸦族等',
+        'classInput': '选择角色的职业定位，如剑士、守卫、法师等',
+        'charInput': '详细描述角色的外观、特征、装备、动作、表情等具体细节'
+      };
+      element.title = defaultTooltips[element.id] || '';
+    }
+  }
+
+  // 为所有文本框添加实时tooltip更新
+  ['basePrompt', 'raceInput', 'classInput', 'charInput'].forEach(id => {
+    const el = document.getElementById(id);
+    // 初始化tooltip
+    updateTooltip(el);
+    // 输入时更新tooltip
+    el.addEventListener('input', () => updateTooltip(el));
+    // 鼠标进入时更新tooltip（确保最新）
+    el.addEventListener('mouseenter', () => updateTooltip(el));
+  });
+
+  // 点击空白关闭下拉
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.combo-dropdown').forEach(dd => {
+      if (!dd.closest('.combo-wrap').contains(e.target)) {
+        dd.classList.remove('open');
+      }
+    });
+  });
+});
+
+// ── 加载保存的设置 ────────────────────────────────────────────────
+function loadSettings() {
+  const ak = localStorage.getItem(LS_AK) || '';
+  const sk = localStorage.getItem(LS_SK) || '';
+  const status = document.getElementById('keyStatus');
+  if (ak && sk) {
+    status.textContent = '· API Key 已配置 ✓';
+    status.style.color = 'var(--success)';
+  } else {
+    status.textContent = '· 未配置 API Key';
+    status.style.color = 'var(--text-dim)';
+  }
+  
+  // 显示项目状态
+  updateProjectStatus();
+}
+
+// ── 更新项目状态显示 ──────────────────────────────────────────────
+function updateProjectStatus() {
+  const projectId = localStorage.getItem(LS_PROJECT_ID);
+  const statusEl = document.getElementById('projectStatus');
+  if (projectId) {
+    statusEl.textContent = `· 项目: ${projectId.slice(0, 8)}...`;
+    statusEl.style.color = 'var(--accent2)';
+  } else {
+    statusEl.textContent = '· 未创建项目';
+    statusEl.style.color = 'var(--text-dim)';
+  }
+}
+
+// ── 重置项目 ─────────────────────────────────────────────────────
+function resetProject() {
+  const projectId = localStorage.getItem(LS_PROJECT_ID);
+  if (projectId) {
+    if (confirm('确定要重置项目吗？下次生成时将创建新项目。')) {
+      localStorage.removeItem(LS_PROJECT_ID);
+      updateProjectStatus();
+      alert('项目已重置，下次生成时将创建新项目');
+    }
+  } else {
+    alert('当前没有活动项目');
+  }
+}
+
+// ── 设置弹窗 ─────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('inputAK').value = localStorage.getItem(LS_AK) || '';
+  document.getElementById('inputSK').value = localStorage.getItem(LS_SK) || '';
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+function saveSettings() {
+  const ak = document.getElementById('inputAK').value.trim();
+  const sk = document.getElementById('inputSK').value.trim();
+  if (ak) localStorage.setItem(LS_AK, ak);
+  else localStorage.removeItem(LS_AK);
+  if (sk) localStorage.setItem(LS_SK, sk);
+  else localStorage.removeItem(LS_SK);
+  closeSettings();
+  loadSettings();
+}
+document.getElementById('settingsModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeSettings();
+});
+
+// ── 查看项目弹窗 ─────────────────────────────────────────────────
+function openProjectView() {
+  const projectId = localStorage.getItem(LS_PROJECT_ID);
+  if (!projectId) {
+    alert('当前没有活动项目。请先生成一张图片来创建项目。');
+    return;
+  }
+  document.getElementById('projectViewModal').classList.add('open');
+  // 更新项目链接
+  const link = document.getElementById('projectViewLink');
+  link.href = `https://www.lovart.ai/canvas?projectId=${projectId}`;
+  link.style.display = 'block';
+}
+
+function closeProjectView() {
+  document.getElementById('projectViewModal').classList.remove('open');
+}
+
+document.getElementById('projectViewModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeProjectView();
+});
+
+// ── 项目查看状态提示 ──────────────────────────────────────────────
+function setProjectViewStatus(text, isLoading) {
+  const status = document.getElementById('projectViewStatus');
+  if (isLoading) {
+    status.innerHTML = `<div class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px;"></div><span>${text}</span>`;
+  } else {
+    status.textContent = text;
+  }
+}
+
+// ── 加载项目内容 ─────────────────────────────────────────────────
+async function loadProjectContent() {
+  const projectId = localStorage.getItem(LS_PROJECT_ID);
+  if (!projectId) {
+    alert('当前没有活动项目');
+    return;
+  }
+
+  const content = document.getElementById('projectViewContent');
+  setProjectViewStatus('正在加载项目内容...', true);
+
+  try {
+    // 尝试多个可能的接口
+    let projectData = null;
+    const endpoints = [
+      `/project/detail?project_id=${encodeURIComponent(projectId)}`,
+      `/project/info?project_id=${encodeURIComponent(projectId)}`,
+      `/project?project_id=${encodeURIComponent(projectId)}`,
+      `/project/${encodeURIComponent(projectId)}`,
+      `/project/artifacts?project_id=${encodeURIComponent(projectId)}`,
+      `/project/content?project_id=${encodeURIComponent(projectId)}`
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const result = await apiRequest('GET', `${PATH_PREFIX}${endpoint}`);
+        if (result) {
+          projectData = result;
+          console.log(`成功获取项目数据，接口: ${endpoint}`, result);
+          break;
+        }
+      } catch (err) {
+        console.log(`尝试 ${endpoint} 失败:`, err.message);
+      }
+    }
+
+    if (!projectData) {
+      content.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
+          <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+          <div>无法获取项目详情</div>
+          <div style="font-size: 13px; margin-top: 8px;">API接口可能不支持，请点击上方"在Lovart中打开"查看完整项目</div>
+        </div>
+      `;
+      setProjectViewStatus('接口暂不可用', false);
+      return;
+    }
+
+    renderProjectContent(projectData, projectId);
+    setProjectViewStatus('加载成功', false);
+
+  } catch (err) {
+    content.innerHTML = `
+      <div style="text-align: center; padding: 60px 20px; color: var(--error);">
+        <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+        <div>加载失败</div>
+        <div style="font-size: 13px; margin-top: 8px; color: var(--text-dim);">${err.message}</div>
+        <div style="font-size: 12px; margin-top: 16px; color: var(--text-dim);">点击上方"在Lovart中打开"查看完整项目</div>
+      </div>
+    `;
+    setProjectViewStatus('加载失败', false);
+    console.error('加载项目内容失败:', err);
+  }
+}
+
+// ── 渲染项目内容 ─────────────────────────────────────────────────
+function renderProjectContent(data, projectId) {
+  const content = document.getElementById('projectViewContent');
+  
+  // 尝试从不同的数据结构中提取图片
+  let images = [];
+  
+  // 可能的数据结构
+  if (Array.isArray(data)) {
+    images = data;
+  } else if (data.artifacts) {
+    images = data.artifacts.filter(a => a.type === 'image');
+  } else if (data.images) {
+    images = data.images;
+  } else if (data.items) {
+    images = data.items;
+  } else if (data.content) {
+    images = Array.isArray(data.content) ? data.content : [data.content];
+  }
+
+  if (images.length === 0) {
+    content.innerHTML = `
+      <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
+        <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
+        <div>项目中暂无图片</div>
+        <div style="font-size: 13px; margin-top: 8px;">生成的图片将会显示在这里</div>
+      </div>
+    `;
+    setProjectViewStatus('项目为空', false);
+    return;
+  }
+
+  const html = `
+    <div style="padding: 16px;">
+      <div style="font-size: 14px; color: var(--text-dim); margin-bottom: 16px;">
+        项目ID: <span style="font-family: monospace; color: var(--accent2);">${projectId}</span>
+        <span style="margin-left: 16px;">共 ${images.length} 张图片</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px;">
+        ${images.map((img, index) => {
+          const url = img.content || img.url || img.src || img;
+          const type = img.type || 'image';
+          if (type !== 'image' || !url) return '';
+          
+          return `
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: transform .2s, border-color .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.borderColor='var(--accent)'" onmouseleave="this.style.transform='';this.style.borderColor='var(--border)'">
+              <img src="${url}" style="width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; cursor: pointer;" alt="项目图片 ${index + 1}" onclick="openViewer('${url}')">
+              <div style="padding: 8px; display: flex; gap: 6px;">
+                <button class="btn-dl" style="flex: 1; font-size: 11px; padding: 4px;" onclick="openViewer('${url}')">👁 查看</button>
+                <button class="btn-dl" style="flex: 1; font-size: 11px; padding: 4px;" onclick="downloadImage('${url}')">⬇ 下载</button>
+              </div>
+            </div>
+          `;
+        }).filter(Boolean).join('')}
+      </div>
+    </div>
+  `;
+
+  content.innerHTML = html;
+  setProjectViewStatus(`已加载 ${images.length} 张图片`, false);
+}
+</script>
+
+<script>
+// ── Combobox 初始化 ───────────────────────────────────────────────
+function initCombo(inputId, dropdownId, options) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const wrap = input.closest('.combo-wrap');
+  // X 清空按钮（id 约定：inputId 去掉 'Input' + 'Clear'）
+  const clearBtn = document.getElementById(inputId.replace('Input', 'Clear'));
+
+  function syncClear() {
+    wrap.classList.toggle('has-value', input.value.length > 0);
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      input.value = '';
+      syncClear();
+      dropdown.classList.remove('open');
+      updatePreview();
+      input.focus();
+    });
+  }
+
+  function renderOptions(filter) {
+    const q = (filter || '').toLowerCase();
+    const filtered = q
+      ? options.filter(o => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
+      : options;
+    dropdown.innerHTML = '';
+    filtered.forEach((opt, i) => {
+      const div = document.createElement('div');
+      div.className = 'combo-option';
+      div.textContent = opt.label;
+      div.dataset.value = opt.value;
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = opt.value;
+        dropdown.classList.remove('open');
+        syncClear();
+        updatePreview();
+      });
+      dropdown.appendChild(div);
+    });
+  }
+
+  input.addEventListener('focus', () => {
+    renderOptions(input.value);
+    dropdown.classList.add('open');
+  });
+
+  input.addEventListener('input', () => {
+    renderOptions(input.value);
+    dropdown.classList.add('open');
+    syncClear();
+    updatePreview();
+  });
+
+  // 箭头键导航
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.combo-option');
+    const active = dropdown.querySelector('.combo-option.active');
+    let idx = Array.from(items).indexOf(active);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idx = Math.min(idx + 1, items.length - 1);
+      items.forEach(el => el.classList.remove('active'));
+      if (items[idx]) items[idx].classList.add('active');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = Math.max(idx - 1, 0);
+      items.forEach(el => el.classList.remove('active'));
+      if (items[idx]) items[idx].classList.add('active');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (active) {
+        input.value = active.dataset.value;
+        dropdown.classList.remove('open');
+        syncClear();
+        updatePreview();
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('open');
+    }
+  });
+}
+
+// ── 提示词预览 ────────────────────────────────────────────────────
+function buildPrompt() {
+  const base = document.getElementById('basePrompt').value.trim();
+  const race = document.getElementById('raceInput').value.trim();
+  const cls  = document.getElementById('classInput').value.trim();
+  const char = document.getElementById('charInput').value.trim();
+  return [base, race, cls, char].filter(Boolean).join('，');
+}
+
+function updatePreview() {
+  const prompt = buildPrompt();
+  const box = document.getElementById('promptPreview');
+  if (prompt) {
+    box.innerHTML = prompt.replace(/，/g, '<strong style="color:var(--accent)">，</strong>');
+  } else {
+    box.textContent = '在上方填写后将自动组合提示词…';
+  }
+}
+
+// ── 图片查看器 ────────────────────────────────────────────────────
+function openViewer(url) {
+  document.getElementById('viewerImage').src = url;
+  document.getElementById('viewerOverlay').classList.add('open');
+}
+function closeViewer() {
+  document.getElementById('viewerOverlay').classList.remove('open');
+}
+// 点击背景关闭
+document.getElementById('viewerOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget || e.target.classList.contains('viewer-close')) {
+    closeViewer();
+  }
+});
+
+// ── 下载图片函数 ──────────────────────────────────────────────────
+async function downloadImage(url) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `card_${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error('下载失败:', err);
+    alert('下载失败，请重试或右键保存图片');
+  }
+}
+
+// ── 状态提示工具 ─────────────────────────────────────────────────
+function setStatus(type, text, showSpinner) {
+  const bar = document.getElementById('statusBar');
+  const spinner = document.getElementById('statusSpinner');
+  const label = document.getElementById('statusText');
+  bar.className = 'status-bar ' + type;
+  spinner.style.display = showSpinner ? 'block' : 'none';
+  label.textContent = text;
+}
+function hideStatus() {
+  document.getElementById('statusBar').className = 'status-bar';
+}
+
+// ── HMAC-SHA256 签名（Web Crypto API）────────────────────────────
+async function hmacSHA256hex(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── API 请求封装 ─────────────────────────────────────────────────
+async function apiRequest(method, path, body) {
+  const ak = localStorage.getItem(LS_AK) || '';
+  const sk = localStorage.getItem(LS_SK) || '';
+  if (!ak || !sk) throw new Error('请先在设置中填写 API Key');
+
+  const ts = String(Math.floor(Date.now() / 1000));
+  const sigMsg = `${method}\n${path}\n${ts}`;
+  const sig = await hmacSHA256hex(sk, sigMsg);
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Access-Key': ak,
+    'X-Timestamp': ts,
+    'X-Signature': sig,
+    'X-Signed-Method': method,
+    'X-Signed-Path': path,
+  };
+
+  const url = BASE_URL + path;
+  const opts = { method, headers };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+
+  const resp = await fetch(url, opts);
+  const data = await resp.json();
+
+  if (!resp.ok || (data.code !== undefined && data.code !== 0)) {
+    throw new Error(data.message || data.error || `HTTP ${resp.status}`);
+  }
+  return data.data !== undefined ? data.data : data;
+}
+
+// ── 轮询状态 ─────────────────────────────────────────────────────
+async function pollStatus(threadId, maxWait = 600) {  // 改为600秒（10分钟）
+  const deadline = Date.now() + maxWait * 1000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 10000));  // 每10秒轮询一次
+    const s = await apiRequest('GET', `${PATH_PREFIX}/chat/status?thread_id=${encodeURIComponent(threadId)}`);
+    if (s.status === 'done' || s.status === 'abort') return s.status;
+  }
+  return 'timeout';
+}
+
+// ── 主生成函数 ───────────────────────────────────────────────────
+async function generate() {
+  const prompt = buildPrompt();
+  if (!prompt.trim()) {
+    setStatus('error', '请至少填写基础提示词或其他提示词');
+    return;
+  }
+
+  const ak = localStorage.getItem(LS_AK) || '';
+  const sk = localStorage.getItem(LS_SK) || '';
+  if (!ak || !sk) {
+    setStatus('error', '请先点击右上角「API 设置」配置密钥');
+    openSettings();
+    return;
+  }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+
+  try {
+    // 1. 获取或创建项目
+    let projectId = localStorage.getItem(LS_PROJECT_ID);
+    
+    if (!projectId) {
+      setStatus('info', '正在创建项目...', true);
+      const proj = await apiRequest('POST', `${PATH_PREFIX}/project/save`, {
+        project_id: '', 
+        project_name: '卡牌角色生成器',
+        canvas: '', 
+        project_cover_list: [],
+        pic_count: 0, 
+        project_type: 3,
+      });
+      projectId = proj.project_id;
+      localStorage.setItem(LS_PROJECT_ID, projectId);
+      console.log('已创建新项目:', projectId);
+    } else {
+      console.log('使用现有项目:', projectId);
+    }
+
+    setStatus('info', '正在发送生成请求…', true);
+
+    // 2. 构造请求体
+    const chatBody = { prompt, project_id: projectId };
+    const model = document.getElementById('modelSelect').value;
+    if (model) {
+      chatBody.tool_config = { include_tools: [model] };
+    }
+
+    // 3. 发送 chat 请求
+    const chatResp = await apiRequest('POST', `${PATH_PREFIX}/chat`, chatBody);
+    const threadId = chatResp.thread_id;
+
+    setStatus('info', '生成中，请稍候（可能需要 1-10 分钟）…', true);
+
+    // 4. 轮询状态（带重试功能）
+    let finalStatus = await pollStatus(threadId, 600);  // 10分钟超时
+    
+    // 如果超时，询问用户是否继续等待
+    while (finalStatus === 'timeout') {
+      btn.disabled = true;
+      setStatus('info', '⏱️ 生成超时，但任务可能仍在进行中');
+      
+      const continueWait = confirm('生成已超过10分钟，任务可能仍在进行中。\n\n是否继续等待10分钟？\n\n点击"确定"继续等待\n点击"取消"停止等待');
+      
+      if (!continueWait) {
+        setStatus('error', '已停止等待。可以稍后点击"历史项目"查看结果。');
+        btn.disabled = false;
+        return;
+      }
+      
+      setStatus('info', '继续等待中，请稍候…', true);
+      finalStatus = await pollStatus(threadId, 600);  // 再等10分钟
+    }
+
+    if (finalStatus === 'abort') {
+      setStatus('error', '生成被中止，请稍后重试');
+      btn.disabled = false;
+      return;
+    }
+
+    // 5. 获取结果
+    setStatus('info', '正在获取生成结果…', true);
+    const result = await apiRequest('GET', `${PATH_PREFIX}/chat/result?thread_id=${encodeURIComponent(threadId)}`);
+    renderResults(result, prompt, projectId);
+    setStatus('success', '✅ 生成成功！');
+
+  } catch (err) {
+    setStatus('error', '❌ ' + (err.message || '未知错误'));
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── 渲染结果 ─────────────────────────────────────────────────────
+function renderResults(result, prompt, projectId) {
+  const grid = document.getElementById('resultsGrid');
+  const items = result.items || [];
+  const artifacts = [];
+  items.forEach(item => {
+    (item.artifacts || []).forEach(a => {
+      if (a.type === 'image' && a.content) artifacts.push(a.content);
+    });
+  });
+
+  if (artifacts.length === 0) {
+    const msg = (items.find(i => i.text) || {}).text || '未返回图像，请调整提示词后重试';
+    setStatus('error', '⚠️ ' + msg.slice(0, 120));
+    return;
+  }
+
+  // 移除空状态
+  const empty = grid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  // 批次标题（包含项目链接）
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'grid-column:1/-1;font-size:13px;color:var(--text-dim);margin-bottom:-6px;display:flex;justify-content:space-between;align-items:center;';
+  titleEl.innerHTML = `
+    <span>[${new Date().toLocaleTimeString()}] "${prompt.slice(0, 60)}${prompt.length > 60 ? '…' : ''}"</span>
+    <a href="https://www.lovart.ai/canvas?projectId=${projectId}" target="_blank" 
+       style="color:var(--accent);text-decoration:none;font-size:12px;transition:opacity .2s;" 
+       onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'">
+      🔗 在Lovart中查看
+    </a>
+  `;
+  grid.insertBefore(titleEl, grid.firstChild);
+
+  artifacts.forEach(url => {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = '生成的卡牌角色';
+    img.loading = 'lazy';
+
+    const footer = document.createElement('div');
+    footer.className = 'result-card-footer';
+
+    const dl = document.createElement('button');
+    dl.className = 'btn-dl';
+    dl.textContent = '⬇ 下载';
+    dl.style.cursor = 'pointer';
+    dl.onclick = () => downloadImage(url);
+
+    const view = document.createElement('button');
+    view.className = 'btn-dl';
+    view.textContent = '👁 查看';
+    view.style.cursor = 'pointer';
+    view.onclick = () => openViewer(url);
+
+    footer.appendChild(view);
+    footer.appendChild(dl);
+    card.appendChild(img);
+    card.appendChild(footer);
+
+    grid.insertBefore(card, titleEl.nextSibling);
+  });
+}
+</script>
+<script>
+// ── 分割栏拖拽 ────────────────────────────────────────────────────
+(function () {
+  const resizer = document.getElementById('resizer');
+  const panelLeft = document.getElementById('panelLeft');
+  const LS_WIDTH = 'card_gen_panel_width';
+
+  // 恢复上次宽度
+  const saved = localStorage.getItem(LS_WIDTH);
+  if (saved) panelLeft.style.width = saved + 'px';
+
+  let startX = 0;
+  let startW = 0;
+  let dragging = false;
+
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startW = panelLeft.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const delta = e.clientX - startX;
+    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.6);
+    panelLeft.style.width = newW + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    localStorage.setItem(LS_WIDTH, panelLeft.offsetWidth);
+  });
+
+  // 触控支持
+  resizer.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startW = panelLeft.offsetWidth;
+    dragging = true;
+    resizer.classList.add('dragging');
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    const delta = e.touches[0].clientX - startX;
+    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.6);
+    panelLeft.style.width = newW + 'px';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    localStorage.setItem(LS_WIDTH, panelLeft.offsetWidth);
+  });
+})();
+</script>
+</html>
