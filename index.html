@@ -314,8 +314,8 @@
     <span id="projectStatus" style="font-size:12px;color:var(--text-dim);"></span>
   </div>
   <div style="display:flex;gap:10px">
-    <button class="btn-settings" onclick="resetProject()" title="清除当前项目，下次生成时创建新项目">🔄 重置项目</button>
-    <button class="btn-settings" onclick="openProjectView()">📂 查看项目</button>
+    <button class="btn-settings" onclick="resetProject()" title="清除当前项目和历史记录，下次生成时创建新项目">🔄 重置项目</button>
+    <button class="btn-settings" onclick="openProjectView()">� 查看项目</button>
     <button class="btn-settings" onclick="openSettings()">⚙️ API 设置</button>
   </div>
 </header>
@@ -325,15 +325,18 @@
   <!-- 左侧表单 -->
   <div class="panel-left" id="panelLeft">
 
+    <!-- 分辨率选择 -->
+    <div class="field-group">
+      <label class="field-label">分辨率</label>
+      <select id="resolutionSelect" style="width:100%;padding:8px 12px;font-size:14px;" title="选择生成分辨率">
+        <option value="1K" selected>1K（1024×1024）</option>
+        <option value="2K">2K（2048×2048）</option>
+      </select>
+    </div>
+
     <!-- 基础提示词 -->
     <div class="field-group">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <label class="field-label" style="margin-bottom:0">基础提示词</label>
-        <select id="resolutionSelect" style="width:auto;padding:4px 10px;font-size:13px;" title="选择生成分辨率">
-          <option value="1K" selected>1K</option>
-          <option value="2K">2K</option>
-        </select>
-      </div>
+      <label class="field-label">基础提示词</label>
       <textarea id="basePrompt" rows="3"
         placeholder="填写通用风格提示词…" 
         title="描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征">卡牌游戏角色插画，纯黑色背景，角色整体有橙黄色粗轮廓描边，贴纸挖空效果，角色主体必须全彩上色，彩色铅笔与蜡笔手绘质感，保留细腻铅笔交叉排线纹理，黑色细线勾勒内部结构，不能是黑白素描稿，不能是灰度线稿，Q版大头小身2至3头身比例，动态姿势充满力量感，正方形画幅，居中构图</textarea>
@@ -371,6 +374,24 @@
         title="详细描述角色的外观、特征、装备、动作、表情等具体细节"></textarea>
     </div>
 
+    <!-- 参照图上传 -->
+    <div class="field-group">
+      <label class="field-label">参照图（可选）</label>
+      <div id="refImgZone" onclick="document.getElementById('refImgInput').click()"
+        style="border:2px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color .2s;background:var(--surface2);min-height:64px;display:flex;align-items:center;justify-content:center;gap:10px;"
+        onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <span id="refImgPlaceholder" style="font-size:13px;color:var(--text-dim);">🖼 点击或拖拽上传参照图</span>
+        <img id="refImgPreview" src="" alt="参照图预览" style="display:none;max-height:80px;max-width:80px;border-radius:4px;object-fit:cover;">
+        <div id="refImgInfo" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;">
+          <span id="refImgName" style="font-size:12px;color:var(--text);"></span>
+          <span id="refImgStatus" style="font-size:11px;color:var(--text-dim);"></span>
+        </div>
+        <button id="refImgClear" onclick="clearRefImage(event)" style="display:none;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px;" title="移除参照图">✕</button>
+      </div>
+      <input type="file" id="refImgInput" accept="image/*" style="display:none;" onchange="handleRefImage(this.files[0])">
+      <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">需在「API 设置」中配置 IMGBB_API_KEY 才能上传。图片 URL 将追加到提示词中。</p>
+    </div>
+
     <hr class="divider">
 
     <!-- 模型选择 -->
@@ -382,6 +403,14 @@
         <option value="generate_image_nano_banana_2">Nano Banana 2（0.5倍积分消耗 22:00-03:00）</option>
         <option value="generate_image_nano_banana_pro">Nano Banana Pro（0.5倍积分消耗 22:00-03:00）</option>
       </select>
+      <!-- 积分信息栏 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;">
+        <span style="color:var(--text-dim);">本次消耗：<span id="costPreview" style="color:var(--accent2);font-weight:600;">— 积分</span></span>
+        <span style="color:var(--text-dim);">今日已用：<span id="usedCredits" style="font-weight:600;">0</span> / <span style="color:var(--success);">100</span> 积分</span>
+      </div>
+      <div style="margin-top:4px;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+        <div id="creditsBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width .4s;"></div>
+      </div>
     </div>
 
     <!-- 提示词预览 -->
@@ -406,7 +435,11 @@
 
   <!-- 右侧结果 -->
   <div class="panel-right">
-    <div class="results-title">生成结果</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="results-title">生成结果</div>
+      <span id="historyCount" style="font-size:12px;color:var(--text-dim);"></span>
+      <div style="font-size:12px;color:var(--warn);">⚠️ 最多保存 50 批，超出自动删除最旧记录，请及时下载图片</div>
+    </div>
     <div class="results-grid" id="resultsGrid">
       <div class="empty-state">
         <div class="icon">🎨</div>
@@ -428,6 +461,11 @@
       <label>LOVART_SECRET_KEY</label>
       <input type="password" id="inputSK" placeholder="sk_xxx...">
       <p class="key-hint">前往 Lovart 平台 → 头像菜单 → AK/SK 管理 获取密钥。<br>密钥仅保存在浏览器本地，不会上传到任何服务器。</p>
+    </div>
+    <div class="modal-field">
+      <label>IMGBB_API_KEY（参照图上传，可选）</label>
+      <input type="password" id="inputImgbb" placeholder="从 api.imgbb.com 免费获取">
+      <p class="key-hint">用于将本地参照图上传到 CDN 并获取 URL。<br>免费注册：<a href="https://api.imgbb.com" target="_blank" style="color:var(--accent);">api.imgbb.com</a> → 登录 → 获取 API key。</p>
     </div>
     <div class="modal-actions">
       <button class="btn-save" onclick="saveSettings()">保存</button>
@@ -562,7 +600,30 @@ const CLASS_OPTIONS = [
 // ── 本地存储 Key ──────────────────────────────────────────────────
 const LS_AK = 'lovart_ak';
 const LS_SK = 'lovart_sk';
-const LS_PROJECT_ID = 'lovart_project_id';  // 保存项目ID
+const LS_PROJECT_ID = 'lovart_project_id';
+const LS_HISTORY = 'lovart_img_history';
+const LS_CREDITS = 'lovart_credits_used';
+const LS_CREDITS_DATE = 'lovart_credits_date';
+const LS_IMGBB = 'imgbb_api_key';  // imgbb 上传 key
+
+// 积分消耗表（model_value + '_' + resolution → 积分/张，正常时段）
+const CREDIT_COST = {
+  'generate_image_gpt_image_2_low_1K':    3,
+  'generate_image_gpt_image_2_low_2K':    4,
+  'generate_image_gpt_image_2_medium_1K': 10,
+  'generate_image_gpt_image_2_medium_2K': 16,
+  'generate_image_nano_banana_2_1K':      14,
+  'generate_image_nano_banana_2_2K':      28,
+  'generate_image_nano_banana_pro_1K':    16,
+  'generate_image_nano_banana_pro_2K':    32,
+};
+// 闲时半价模型（22:00-03:00）
+const HALF_PRICE_MODELS = new Set([
+  'generate_image_nano_banana_2_1K',
+  'generate_image_nano_banana_2_2K',
+  'generate_image_nano_banana_pro_1K',
+  'generate_image_nano_banana_pro_2K',
+]);
 
 // ── 初始化 ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -570,12 +631,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initCombo('classInput', 'classDropdown', CLASS_OPTIONS);
   updatePreview();
   loadSettings();
+  loadHistory();  // 恢复历史图片
 
   // 实时更新预览
   ['basePrompt', 'raceInput', 'classInput', 'charInput'].forEach(id => {
     document.getElementById(id).addEventListener('input', updatePreview);
   });
   document.getElementById('resolutionSelect').addEventListener('change', updatePreview);
+  document.getElementById('resolutionSelect').addEventListener('change', updateCreditsUI);
+  document.getElementById('modelSelect').addEventListener('change', updateCreditsUI);
+  updateCreditsUI(); // 初始化积分显示
 
   // 动态更新tooltip显示文本框完整内容
   function updateTooltip(element) {
@@ -613,6 +678,19 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // 参照图拖拽支持
+  const zone = document.getElementById('refImgZone');
+  if (zone) {
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+    zone.addEventListener('dragleave', () => { zone.style.borderColor = 'var(--border)'; });
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.style.borderColor = 'var(--border)';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) handleRefImage(file);
+    });
+  }
 });
 
 // ── 加载保存的设置 ────────────────────────────────────────────────
@@ -649,10 +727,19 @@ function updateProjectStatus() {
 function resetProject() {
   const projectId = localStorage.getItem(LS_PROJECT_ID);
   if (projectId) {
-    if (confirm('确定要重置项目吗？下次生成时将创建新项目。')) {
+    if (confirm('确定要重置项目吗？将同时清除本地历史图片记录，下次生成时创建新项目。')) {
       localStorage.removeItem(LS_PROJECT_ID);
+      localStorage.removeItem(LS_HISTORY);
       updateProjectStatus();
-      alert('项目已重置，下次生成时将创建新项目');
+      updateHistoryCount();
+      const grid = document.getElementById('resultsGrid');
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🎨</div>
+          <div>填写提示词，点击「生成卡牌角色」开始创作</div>
+        </div>
+      `;
+      alert('项目已重置，历史记录已清除');
     }
   } else {
     alert('当前没有活动项目');
@@ -663,6 +750,7 @@ function resetProject() {
 function openSettings() {
   document.getElementById('inputAK').value = localStorage.getItem(LS_AK) || '';
   document.getElementById('inputSK').value = localStorage.getItem(LS_SK) || '';
+  document.getElementById('inputImgbb').value = localStorage.getItem(LS_IMGBB) || '';
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettings() {
@@ -671,10 +759,13 @@ function closeSettings() {
 function saveSettings() {
   const ak = document.getElementById('inputAK').value.trim();
   const sk = document.getElementById('inputSK').value.trim();
+  const imgbb = document.getElementById('inputImgbb').value.trim();
   if (ak) localStorage.setItem(LS_AK, ak);
   else localStorage.removeItem(LS_AK);
   if (sk) localStorage.setItem(LS_SK, sk);
   else localStorage.removeItem(LS_SK);
+  if (imgbb) localStorage.setItem(LS_IMGBB, imgbb);
+  else localStorage.removeItem(LS_IMGBB);
   closeSettings();
   loadSettings();
 }
@@ -933,12 +1024,15 @@ function initCombo(inputId, dropdownId, options) {
 // ── 提示词预览 ────────────────────────────────────────────────────
 function buildPrompt() {
   const resolution = document.getElementById('resolutionSelect').value;
-  const resText = resolution === '2K' ? '2K超高清晰度居中构图' : '1K高清晰度居中构图';
+  const resText = resolution === '2K'
+    ? '2048×2048 高分辨率游戏卡牌角色图标，非 1K，非 4K，禁止低分辨率缩小，禁止超分辨率放大，禁止高清增强'
+    : '1024×1024 低分辨率游戏卡牌角色图标，非 2K，非 4K，禁止超分辨率放大，禁止高清增强';
   const base = document.getElementById('basePrompt').value.trim();
   const race = document.getElementById('raceInput').value.trim();
   const cls  = document.getElementById('classInput').value.trim();
   const char = document.getElementById('charInput').value.trim();
-  return [base, resText, race, cls, char].filter(Boolean).join('，');
+  const ref  = refImageUrl ? `参照图风格参考：${refImageUrl}` : '';
+  return [resText, base, race, cls, char, ref].filter(Boolean).join('，');
 }
 
 function updatePreview() {
@@ -1137,6 +1231,11 @@ async function generate() {
     setStatus('info', '正在获取生成结果…', true);
     const result = await apiRequest('GET', `${PATH_PREFIX}/chat/result?thread_id=${encodeURIComponent(threadId)}`);
     renderResults(result, prompt, projectId);
+    // 统计积分消耗（按实际生成图片数计算）
+    const items = result.items || [];
+    let imgCount = 0;
+    items.forEach(item => { (item.artifacts || []).forEach(a => { if (a.type === 'image' && a.content) imgCount++; }); });
+    if (imgCount > 0) addUsedCredits(getCostPerImage() * imgCount);
     setStatus('success', '✅ 生成成功！');
 
   } catch (err) {
@@ -1147,41 +1246,230 @@ async function generate() {
   }
 }
 
-// ── 渲染结果 ─────────────────────────────────────────────────────
-function renderResults(result, prompt, projectId) {
-  const grid = document.getElementById('resultsGrid');
-  const items = result.items || [];
-  const artifacts = [];
-  items.forEach(item => {
-    (item.artifacts || []).forEach(a => {
-      if (a.type === 'image' && a.content) artifacts.push(a.content);
-    });
-  });
+// ── 参照图上传 ────────────────────────────────────────────────────
+let refImageUrl = ''; // 当前参照图的 CDN URL
 
-  if (artifacts.length === 0) {
-    const msg = (items.find(i => i.text) || {}).text || '未返回图像，请调整提示词后重试';
-    setStatus('error', '⚠️ ' + msg.slice(0, 120));
-    return;
+function handleRefImage(file) {
+  if (!file) return;
+  const name = file.name;
+  const imgbbKey = localStorage.getItem(LS_IMGBB);
+
+  // 先显示本地预览
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('refImgPreview').src = e.target.result;
+    document.getElementById('refImgPreview').style.display = 'block';
+    document.getElementById('refImgPlaceholder').style.display = 'none';
+    document.getElementById('refImgInfo').style.display = 'flex';
+    document.getElementById('refImgName').textContent = name;
+    document.getElementById('refImgClear').style.display = 'block';
+
+    if (!imgbbKey) {
+      document.getElementById('refImgStatus').textContent = '⚠️ 未配置 IMGBB_API_KEY，无法上传';
+      document.getElementById('refImgStatus').style.color = 'var(--warn)';
+      refImageUrl = '';
+      return;
+    }
+
+    document.getElementById('refImgStatus').textContent = '⏳ 上传中...';
+    document.getElementById('refImgStatus').style.color = 'var(--text-dim)';
+
+    // 上传到 imgbb
+    const base64 = e.target.result.split(',')[1];
+    const form = new FormData();
+    form.append('key', imgbbKey);
+    form.append('image', base64);
+    form.append('name', name);
+
+    fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          refImageUrl = data.data.url;
+          document.getElementById('refImgStatus').textContent = '✅ 上传成功';
+          document.getElementById('refImgStatus').style.color = 'var(--success)';
+          updatePreview();
+        } else {
+          throw new Error(data.error?.message || '上传失败');
+        }
+      })
+      .catch(err => {
+        refImageUrl = '';
+        document.getElementById('refImgStatus').textContent = '❌ ' + err.message;
+        document.getElementById('refImgStatus').style.color = 'var(--error)';
+      });
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearRefImage(e) {
+  e.stopPropagation();
+  refImageUrl = '';
+  document.getElementById('refImgInput').value = '';
+  document.getElementById('refImgPreview').style.display = 'none';
+  document.getElementById('refImgPreview').src = '';
+  document.getElementById('refImgPlaceholder').style.display = 'block';
+  document.getElementById('refImgInfo').style.display = 'none';
+  document.getElementById('refImgClear').style.display = 'none';
+  updatePreview();
+}
+
+function setAsRefImage(url) {
+  refImageUrl = url;
+  // 更新参照图区域 UI
+  document.getElementById('refImgPreview').src = url;
+  document.getElementById('refImgPreview').style.display = 'block';
+  document.getElementById('refImgPlaceholder').style.display = 'none';
+  document.getElementById('refImgInfo').style.display = 'flex';
+  document.getElementById('refImgName').textContent = '来自生成结果';
+  document.getElementById('refImgStatus').textContent = '✅ 已设为参照图';
+  document.getElementById('refImgStatus').style.color = 'var(--success)';
+  document.getElementById('refImgClear').style.display = 'block';
+  updatePreview();
+  // 滚动到左侧参照图区域
+  document.getElementById('refImgZone').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── 积分系统 ──────────────────────────────────────────────────────
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+}
+
+function getUsedCredits() {
+  const today = getTodayKey();
+  const savedDate = localStorage.getItem(LS_CREDITS_DATE);
+  if (savedDate !== today) {
+    // 新的一天，重置
+    localStorage.setItem(LS_CREDITS_DATE, today);
+    localStorage.setItem(LS_CREDITS, '0');
+    return 0;
   }
+  return parseInt(localStorage.getItem(LS_CREDITS) || '0', 10);
+}
 
-  // 移除空状态
+function addUsedCredits(amount) {
+  const today = getTodayKey();
+  localStorage.setItem(LS_CREDITS_DATE, today);
+  const current = getUsedCredits();
+  localStorage.setItem(LS_CREDITS, String(current + amount));
+  updateCreditsUI();
+}
+
+function getCostPerImage() {
+  const model = (document.getElementById('modelSelect') || {}).value || '';
+  const res = (document.getElementById('resolutionSelect') || {}).value || '1K';
+  const key = `${model}_${res}`;
+  const base = CREDIT_COST[key] || 0;
+  // 22:00-03:00 闲时半价
+  if (base > 0 && HALF_PRICE_MODELS.has(key)) {
+    const h = new Date().getHours();
+    if (h >= 22 || h < 3) return Math.ceil(base / 2);
+  }
+  return base;
+}
+
+function updateCreditsUI() {
+  const used = getUsedCredits();
+  const cost = getCostPerImage();
+  const remaining = Math.max(0, 100 - used);
+
+  const usedEl = document.getElementById('usedCredits');
+  const barEl = document.getElementById('creditsBar');
+  const costEl = document.getElementById('costPreview');
+
+  if (usedEl) {
+    usedEl.textContent = used;
+    usedEl.style.color = used >= 100 ? 'var(--error)' : used >= 80 ? 'var(--warn)' : 'var(--text)';
+  }
+  if (barEl) {
+    const pct = Math.min(100, (used / 100) * 100);
+    barEl.style.width = pct + '%';
+    barEl.style.background = pct >= 100 ? 'var(--error)' : pct >= 80
+      ? 'linear-gradient(90deg,var(--warn),var(--error))'
+      : 'linear-gradient(90deg,var(--accent),var(--accent2))';
+  }
+  if (costEl) {
+    if (cost > 0) {
+      const canGen = Math.floor(remaining / cost);
+      const model = (document.getElementById('modelSelect') || {}).value || '';
+      const res = (document.getElementById('resolutionSelect') || {}).value || '1K';
+      const key = `${model}_${res}`;
+      const h = new Date().getHours();
+      const isHalfTime = (h >= 22 || h < 3) && HALF_PRICE_MODELS.has(key);
+      const halfTag = isHalfTime ? ' <span style="color:var(--success);font-size:11px;">🌙 闲时半价</span>' : '';
+      costEl.innerHTML = `${cost} 积分（剩余可生成约 ${canGen} 张）${halfTag}`;
+      costEl.style.color = cost > remaining ? 'var(--error)' : 'var(--accent2)';
+    } else {
+      costEl.textContent = '— 积分';
+      costEl.style.color = 'var(--accent2)';
+    }
+  }
+}
+
+// ── 历史记录存储 ─────────────────────────────────────────────────
+function updateHistoryCount() {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch(e) {}
+  const el = document.getElementById('historyCount');
+  if (el) el.textContent = history.length > 0 ? `${history.length} / 50` : '';
+}
+
+function saveHistory(prompt, urls, projectId, aiText) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch(e) {}
+  history.unshift({ time: Date.now(), prompt, urls, projectId, aiText: aiText || '' });
+  if (history.length > 50) history = history.slice(0, 50);
+  try { localStorage.setItem(LS_HISTORY, JSON.stringify(history)); } catch(e) {
+    history = history.slice(0, 25);
+    try { localStorage.setItem(LS_HISTORY, JSON.stringify(history)); } catch(e2) {}
+  }
+  updateHistoryCount();
+}
+
+function clearHistory() {
+  if (!confirm('确定清除所有历史图片记录？\n（仅清除本地记录，Lovart 平台上的项目不受影响）')) return;
+  localStorage.removeItem(LS_HISTORY);
+  updateHistoryCount();
+  const grid = document.getElementById('resultsGrid');
+  grid.innerHTML = `
+    <div class="empty-state">
+      <div class="icon">🎨</div>
+      <div>填写提示词，点击「生成卡牌角色」开始创作</div>
+    </div>
+  `;
+}
+
+function loadHistory() {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch(e) {}
+  updateHistoryCount();
+  if (history.length === 0) return;
+  const grid = document.getElementById('resultsGrid');
   const empty = grid.querySelector('.empty-state');
   if (empty) empty.remove();
+  history.slice().reverse().forEach(entry => {
+    renderBatch(entry.urls, entry.prompt, entry.projectId, new Date(entry.time), entry.aiText || '');
+  });
+}
 
-  // 批次标题（包含项目链接）
+// ── 渲染单批次（抽取公共逻辑）────────────────────────────────────
+function renderBatch(urls, prompt, projectId, dateObj, aiText) {
+  const grid = document.getElementById('resultsGrid');
+  const timeStr = dateObj ? dateObj.toLocaleTimeString() : new Date().toLocaleTimeString();
+
   const titleEl = document.createElement('div');
   titleEl.style.cssText = 'grid-column:1/-1;font-size:13px;color:var(--text-dim);margin-bottom:-6px;display:flex;justify-content:space-between;align-items:center;';
   titleEl.innerHTML = `
-    <span>[${new Date().toLocaleTimeString()}] "${prompt.slice(0, 60)}${prompt.length > 60 ? '…' : ''}"</span>
+    <span title="[${timeStr}] ${prompt}" style="cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">[${timeStr}] "${prompt.slice(0, 60)}${prompt.length > 60 ? '…' : ''}"</span>
     <a href="https://www.lovart.ai/canvas?projectId=${projectId}" target="_blank" 
-       style="color:var(--accent);text-decoration:none;font-size:12px;transition:opacity .2s;" 
+       style="color:var(--accent);text-decoration:none;font-size:12px;transition:opacity .2s;flex-shrink:0;" 
        onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'">
       🔗 在Lovart中查看
     </a>
   `;
   grid.insertBefore(titleEl, grid.firstChild);
 
-  artifacts.forEach(url => {
+  urls.forEach(url => {
     const card = document.createElement('div');
     card.className = 'result-card';
 
@@ -1205,13 +1493,84 @@ function renderResults(result, prompt, projectId) {
     view.style.cursor = 'pointer';
     view.onclick = () => openViewer(url);
 
+    const useAsRef = document.createElement('button');
+    useAsRef.className = 'btn-dl';
+    useAsRef.textContent = '🖼 参照';
+    useAsRef.style.cursor = 'pointer';
+    useAsRef.title = '将此图设为参照图';
+    useAsRef.onclick = () => setAsRefImage(url);
+
     footer.appendChild(view);
     footer.appendChild(dl);
+    footer.appendChild(useAsRef);
     card.appendChild(img);
     card.appendChild(footer);
 
     grid.insertBefore(card, titleEl.nextSibling);
   });
+
+  // AI 描述文字（折叠展示）
+  if (aiText) {
+    const descEl = document.createElement('div');
+    descEl.style.cssText = 'grid-column:1/-1;margin-top:-4px;margin-bottom:4px;';
+
+    // 将 markdown 简单转换：**粗体**、- 列表、\n 换行
+    const html = aiText
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text)">$1</strong>')
+      .replace(/^- (.+)$/gm, '<span style="display:block;padding-left:1em;">· $1</span>')
+      .replace(/\n/g, '<br>');
+
+    descEl.innerHTML = `
+      <details style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0;">
+        <summary style="cursor:pointer;padding:8px 12px;font-size:12px;color:var(--text-dim);user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:10px;">▶</span> 查看 AI 生成描述
+        </summary>
+        <div style="padding:10px 14px 12px;font-size:13px;color:var(--text-dim);line-height:1.8;border-top:1px solid var(--border);">${html}</div>
+      </details>
+    `;
+
+    // 展开时箭头旋转
+    const details = descEl.querySelector('details');
+    const arrow = descEl.querySelector('summary span');
+    details.addEventListener('toggle', () => {
+      arrow.style.transform = details.open ? 'rotate(90deg)' : '';
+      arrow.style.transition = 'transform .2s';
+    });
+
+    grid.insertBefore(descEl, titleEl.nextSibling);
+  }
+}
+
+// ── 渲染结果 ─────────────────────────────────────────────────────
+function renderResults(result, prompt, projectId) {
+  const grid = document.getElementById('resultsGrid');
+  const items = result.items || [];
+  const artifacts = [];
+  items.forEach(item => {
+    (item.artifacts || []).forEach(a => {
+      if (a.type === 'image' && a.content) artifacts.push(a.content);
+    });
+  });
+
+  if (artifacts.length === 0) {
+    const msg = (items.find(i => i.text) || {}).text || '未返回图像，请调整提示词后重试';
+    setStatus('error', '⚠️ ' + msg.slice(0, 120));
+    return;
+  }
+
+  // 提取 AI 描述文字
+  const aiText = (items.find(i => i.type === 'assistant' && i.text) || {}).text || '';
+
+  // 移除空状态
+  const empty = grid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  // 保存到历史
+  saveHistory(prompt, artifacts, projectId, aiText);
+
+  // 渲染本批次
+  renderBatch(artifacts, prompt, projectId, new Date(), aiText);
 }
 </script>
 <script>
