@@ -327,7 +327,13 @@
 
     <!-- 基础提示词 -->
     <div class="field-group">
-      <label class="field-label">基础提示词</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <label class="field-label" style="margin-bottom:0">基础提示词</label>
+        <select id="resolutionSelect" style="width:auto;padding:4px 10px;font-size:13px;" title="选择生成分辨率">
+          <option value="1K" selected>1K</option>
+          <option value="2K">2K</option>
+        </select>
+      </div>
       <textarea id="basePrompt" rows="3"
         placeholder="填写通用风格提示词…" 
         title="描述卡牌角色的整体画风、背景、轮廓、纹理等通用特征">卡牌游戏角色插画，纯黑色背景，角色整体有橙黄色粗轮廓描边（贴纸挖空效果），内部手绘铅笔素描交叉排线纹理，黑色细线内部勾勒结构，Q版大头小身2至3头身比例，动态姿势充满力量感，高清晰度居中构图，正方形画幅</textarea>
@@ -371,7 +377,8 @@
     <div class="field-group">
       <label class="field-label">生成模型</label>
       <select id="modelSelect">
-        <option value="generate_image_gpt_image_2_medium" selected>GPT Image 2 Medium（默认）</option>
+        <option value="generate_image_gpt_image_2_low" selected>GPT Image 2 Low（默认）</option>
+        <option value="generate_image_gpt_image_2_medium">GPT Image 2 Medium</option>
         <option value="generate_image_nano_banana_2">Nano Banana 2（0.5倍积分消耗 22:00-03:00）</option>
         <option value="generate_image_nano_banana_pro">Nano Banana Pro（0.5倍积分消耗 22:00-03:00）</option>
       </select>
@@ -568,6 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ['basePrompt', 'raceInput', 'classInput', 'charInput'].forEach(id => {
     document.getElementById(id).addEventListener('input', updatePreview);
   });
+  document.getElementById('resolutionSelect').addEventListener('change', updatePreview);
 
   // 动态更新tooltip显示文本框完整内容
   function updateTooltip(element) {
@@ -924,7 +932,9 @@ function initCombo(inputId, dropdownId, options) {
 
 // ── 提示词预览 ────────────────────────────────────────────────────
 function buildPrompt() {
-  const base = document.getElementById('basePrompt').value.trim();
+  const resolution = document.getElementById('resolutionSelect').value;
+  const resText = resolution === '2K' ? '2K超高清晰度居中构图' : '高清晰度居中构图';
+  const base = document.getElementById('basePrompt').value.trim().replace('高清晰度居中构图', resText);
   const race = document.getElementById('raceInput').value.trim();
   const cls  = document.getElementById('classInput').value.trim();
   const char = document.getElementById('charInput').value.trim();
